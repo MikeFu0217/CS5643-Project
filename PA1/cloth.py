@@ -9,7 +9,7 @@ import helper as hp
 ti.init(arch=ti.gpu)
 
 # Collision Obstacle
-obstacle = Scene(Init.CLOTH_TABLE)
+obstacle = Scene(Init.CLOTH_SPHERE)
 contact_eps = 1e-2
 record = False
 
@@ -34,8 +34,8 @@ k_drag = 1e0 * particle_mass # viscous damping
 
 # some particles can be pinned in place
 # pins are named by indices in the particle grid
-# pins = [[0,0], [0,n-1]]
-pins = []
+pins = [[0,0], [0,n-1]]
+# pins = []
 
 # springs
 ijij_structural_numpy = hp.ge_square_edges_ijij(n, "structural")
@@ -111,35 +111,35 @@ def timestep(k0: float, k1: float, k2: float):
         v[i, j] += dt * forces[i, j] / particle_mass
 
         # ---------------------- Collision with Sphere ---------------------- #
-        # if tm.length(x[i, j] - obstacle.ball_center[0]) < ball_radius + contact_eps:
-        #     normal = tm.normalize(x[i, j] - obstacle.ball_center[0])
-        #     v[i, j] -=  tm.min(0, tm.dot(v[i, j], normal)) * normal
+        if tm.length(x[i, j] - obstacle.ball_center[0]) < ball_radius + contact_eps:
+            normal = tm.normalize(x[i, j] - obstacle.ball_center[0])
+            v[i, j] -=  tm.min(0, tm.dot(v[i, j], normal)) * normal
         # ---------------------- Collision with Sphere ---------------------- #
 
         # ---------------------- Collision with Table  ---------------------- #
-        # For convenience, only detect with table top
-        p_x, p_y, p_z = x[i, j][0], x[i, j][1], x[i, j][2]
-        top_x, top_y, top_z = obstacle.tabletop_center[0][0], obstacle.tabletop_center[0][1], obstacle.tabletop_center[0][2]
-        top_h, top_r = obstacle.tabletop_height, obstacle.tabletop_radius
-        d_h = tm.sqrt( (p_x-top_x)**2 + (p_z-top_z)**2 )
+        # # For convenience, only detect with table top
+        # p_x, p_y, p_z = x[i, j][0], x[i, j][1], x[i, j][2]
+        # top_x, top_y, top_z = obstacle.tabletop_center[0][0], obstacle.tabletop_center[0][1], obstacle.tabletop_center[0][2]
+        # top_h, top_r = obstacle.tabletop_height, obstacle.tabletop_radius
+        # d_h = tm.sqrt( (p_x-top_x)**2 + (p_z-top_z)**2 )
         
-        pnt_top = (top_y + top_h/2) - p_y
-        # For the bottom surface: how far above the bottom is the particle?
-        pnt_bottom = p_y - (top_y - top_h/2)
-        # For the side surface: how far inside the table's radius is the particle?
-        pnt_side = top_r - d_h
+        # pnt_top = (top_y + top_h/2) - p_y
+        # # For the bottom surface: how far above the bottom is the particle?
+        # pnt_bottom = p_y - (top_y - top_h/2)
+        # # For the side surface: how far inside the table's radius is the particle?
+        # pnt_side = top_r - d_h
     
-        # If the particle is in inside the table top
-        if p_y < top_y + top_h/2 + contact_eps and p_y > top_y - top_h/2 - contact_eps and d_h < top_r + contact_eps:                
-            if pnt_side < pnt_top and pnt_side < pnt_bottom: # Collision with side
-                normal = tm.normalize(ti.Vector([p_x-top_x, 0.0, p_z-top_z]))
-                v[i, j] -=  tm.min(0, tm.dot(v[i, j], normal)) * normal
-            elif pnt_top < pnt_side and pnt_top < pnt_bottom: # Collision with top
-                normal = ti.Vector([0, 1, 0])
-                v[i, j] -=  tm.min(0, tm.dot(v[i, j], normal)) * normal
-            else: # Collision with bottom
-                normal = ti.Vector([0, -1, 0])
-                v[i, j] -=  tm.min(0, tm.dot(v[i, j], normal)) * normal
+        # # If the particle is in inside the table top
+        # if p_y < top_y + top_h/2 + contact_eps and p_y > top_y - top_h/2 - contact_eps and d_h < top_r + contact_eps:                
+        #     if pnt_side < pnt_top and pnt_side < pnt_bottom: # Collision with side
+        #         normal = tm.normalize(ti.Vector([p_x-top_x, 0.0, p_z-top_z]))
+        #         v[i, j] -=  tm.min(0, tm.dot(v[i, j], normal)) * normal
+        #     elif pnt_top < pnt_side and pnt_top < pnt_bottom: # Collision with top
+        #         normal = ti.Vector([0, 1, 0])
+        #         v[i, j] -=  tm.min(0, tm.dot(v[i, j], normal)) * normal
+        #     else: # Collision with bottom
+        #         normal = ti.Vector([0, -1, 0])
+        #         v[i, j] -=  tm.min(0, tm.dot(v[i, j], normal)) * normal
         # ---------------------- Collision with Table  ---------------------- #
 
         x[i, j] += dt * v[i, j]
@@ -212,7 +212,7 @@ initialize_mesh_indices()
 while True:
 
     for k in range(ns):
-        timestep(default_k_spring, default_k_spring, default_k_spring)
+        # timestep(default_k_spring, default_k_spring, default_k_spring)
         current_t += dt
         update_vertices()
 
