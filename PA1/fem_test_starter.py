@@ -10,6 +10,7 @@ ti.init(arch=ti.vulkan)
 # 1: Co-rotated linear model
 # 2: St. Venant Kirchhoff model ( StVK )
 # 3: Neo-Hookean model
+model_names = ['c', 'v', 'n']
 model = 'c'
 prev_model = model
 damping_toggle = ti.field(ti.i32, ())
@@ -264,28 +265,25 @@ init()
 paused = False
 window = ti.ui.Window("Linear FEM", (600, 600))
 canvas = window.get_canvas()
-canvas.set_background_color((1, 1, 1))
+canvas.set_background_color((1,1,1))
 
 while window.running:
     for e in window.get_events(ti.ui.PRESS):
         if e.key in [ti.ui.ESCAPE, ti.GUI.EXIT]:
             exit()
-        elif e.key == 'v' or e.key == 'c' or e.key == 'n':
+        elif e.key in ['v','c','n']:
             prev_model = model
             model = e.key
             if prev_model != model:
                 reset_state()
-        elif e.key =='d' or e.key == 'D':
+        elif e.key in ['d','D']:
             damping_toggle[None] = not damping_toggle[None]
-
         elif e.key == ti.GUI.UP:
             is_stretch[None] = 1
             initialize()
-
         elif e.key == ti.GUI.DOWN:
             is_stretch[None] = 0
             initialize()
-
         elif e.key == ti.GUI.SPACE:
             paused = not paused
 
@@ -297,30 +295,38 @@ while window.running:
     ##############################################################
 
     # Draw wireframe of mesh
-    canvas.lines(vertices=x,indices=edges,width=0.002,color=(0,0,0))
+    canvas.lines(vertices=x, indices=edges, width=0.002, color=(0,0,0))
 
-    # text
     gui = window.get_gui()
-    with gui.sub_window("Controls", 0.02, 0.02, 0.4, 0.2):
-        if model == 'c':
-            gui.text('Co-rotated linear model')
-        elif model == 'v':
-            gui.text('Venant-Kirchhoff model')
-        else:
-            gui.text('Neo-Hookean model')
+    with gui.sub_window("Controls", 0.02, 0.02, 0.4, 0.35):
+        idx_old = model_names.index(model)
+        idx_new = gui.slider_int("Model ID", idx_old, 0, 2)
+        if idx_new != idx_old:
+            prev_model = model
+            model = model_names[idx_new]
+            if prev_model != model:
+                reset_state()
 
-        gui.text('Press \'c,v,n\' to switch model')
-        gui.text('Press up to test stretch mode')
-        gui.text('Press down to test compression mode')
-        gui.text('Press \'SPACE\' to pause/unpause')
-        gui.text('Press \'d\' to toggle damping')
+        E_old = YoungsModulus[None]
+        E_new = gui.slider_float("Young's Modulus (E)", E_old, 1e1, 1e3)
+        if E_new != E_old:
+            YoungsModulus[None] = E_new
+            compute_lame_parameters()
 
-        if damping_toggle[None]:
-            gui.text('D: Damping On')
-        else:
-            gui.text('D: Damping Off')
+        nu_old = PoissonsRatio[None]
+        nu_new = gui.slider_float("Poisson Ratio (ν)", nu_old, 0.0, 0.49)
+        if nu_new != nu_old:
+            PoissonsRatio[None] = nu_new
+            compute_lame_parameters()
 
+        gui.text(f"Mode: {'Co-rotated' if model=='c' else 'StVK' if model=='v' else 'Neo-Hookean'}")
+        gui.text(f"E = {YoungsModulus[None]:.1f}, ν = {PoissonsRatio[None]:.3f}")
+        gui.text("Press c/v/n or use slider above")
+        gui.text("Up/Down: stretch/compress")
+        gui.text("SPACE: pause/unpause")
+        gui.text("d: toggle damping")
+        gui.text(f"Damping: {'On' if damping_toggle[None] else 'Off'}")
         if paused:
-            gui.text('Simulation PAUSED')
+            gui.text("Simulation PAUSED")
 
     window.show()
