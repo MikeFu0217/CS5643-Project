@@ -8,7 +8,7 @@ import PA1.helper as hp
 ti.init(arch=ti.vulkan)
 # ------------------- Simulation parameters ------------------- #
 # timestep for explicit integration
-n = 16
+n = 64
 stepsize = 2e-2 / n
 ns = int((1/60) // stepsize)
 dt = (1/60) / ns
@@ -19,13 +19,13 @@ gravity = ti.Vector([0, -9.8, 0])
 m = 1.0 / (n*n)
 # viscous damping
 k_drag = ti.field(ti.f32, ())
-k_drag[None] = 5.0
+k_drag[None] = 1.2
 # physical quantities
 YoungsModulus = ti.field(ti.f32, ())
 PoissonsRatio = ti.field(ti.f32, ())
 # Default values for reproducing the reference
-YoungsModulus[None] = 1e2
-PoissonsRatio[None] = 0.3
+YoungsModulus[None] = 450
+PoissonsRatio[None] = 0.15
 
 # 3D Lame parameters
 Lambda = ti.field(ti.f32, ())
@@ -67,8 +67,10 @@ for i in range(n-1):
 triangles.from_numpy(triangles_np)
 
 # pinning, indexes of vertices
-pins_np = np.array([0, n-1], dtype=np.int32)
-pins = ti.field(dtype=int, shape=2)
+# pins_np = [0, n-1]
+pins_np = [0]
+pins_np = np.array(pins_np, dtype=np.int32)
+pins = ti.field(dtype=int, shape=pins_np.shape)
 pins.from_numpy(pins_np)
 # ------------------- system state ------------------- #
 x_rest = ti.Vector.field(3, dtype=ti.f32, shape=N)
@@ -186,8 +188,9 @@ def timestep():
         v[i] -= v[i] * k_drag[None] * dt
     
     # Pinning
-    for pin in pins:
-        v[pin] = ti.Vector([0.0, 0.0, 0.0])
+    for k in range(pins.shape[0]):
+        idx = pins[k]           # 读出 0, 15
+        v[idx] = ti.Vector([0.0,0.0,0.0])
     
     # Update position
     for i in range(N):
@@ -230,7 +233,7 @@ def update_vertices():
 # Create Taichi UI
 scene = ti.ui.Scene()
 camera = ti.ui.Camera()
-window = ti.ui.Window("Taichi Cloth Simulation on GGUI", (1024, 1024),
+window = ti.ui.Window("Cloth Deformation", (1024, 1024),
                       vsync=True)
 gui = window.get_gui()
 canvas = window.get_canvas()
@@ -276,13 +279,16 @@ while window.running:
     # gui
     gui = window.get_gui()
     with gui.sub_window("Controls", 0.02, 0.02, 0.4, 0.25):
+
+        # Text
+        gui.text("Press SPACE to reset simulation")
         
         # Update k_drag with a slider
-        new_k_drag = gui.slider_float("Viscous Damping", k_drag[None], 0.0, 10.0)
+        new_k_drag = gui.slider_float("Viscous Damping", k_drag[None], 1.0, 10.0)
         if new_k_drag != k_drag[None]:
             k_drag[None] = new_k_drag
-        new_youngs_modulus = gui.slider_float('Youngs Modulus', YoungsModulus[None], 0, 620)
-        new_possion_ratio = gui.slider_float('Poissons Ratio', PoissonsRatio[None], 0.0, 0.4)
+        new_youngs_modulus = gui.slider_float('Youngs Modulus', YoungsModulus[None], 420, 1e3)
+        new_possion_ratio = gui.slider_float('Poissons Ratio', PoissonsRatio[None], 0.0, 0.2)
         # Update Young's Modulus with a slider
         if new_youngs_modulus != YoungsModulus[None] or new_possion_ratio != PoissonsRatio[None]:
             YoungsModulus[None] = new_youngs_modulus
