@@ -17,6 +17,9 @@ dt = (1/60) / ns
 # particles are affected by gravity
 gravity = ti.Vector([0, -9.8, 0])
 m = 1.0 / (n*n)
+# viscous damping
+k_drag = ti.field(ti.f32, ())
+k_drag[None] = 5.0
 # physical quantities
 YoungsModulus = ti.field(ti.f32, ())
 PoissonsRatio = ti.field(ti.f32, ())
@@ -177,7 +180,12 @@ def timestep():
     # Update velocity
     for i in range(N):
         v[i] += dt * force[i] / m
+
+    # viscous damping
+    for i in v:
+        v[i] -= v[i] * k_drag[None] * dt
     
+    # Pinning
     for pin in pins:
         v[pin] = ti.Vector([0.0, 0.0, 0.0])
     
@@ -240,8 +248,16 @@ init_simulation()
 initialize_mesh_indices()
 
 # Run sim
-while True:
+while window.running:
 
+    # keyboard controls
+    for e in window.get_events(ti.ui.PRESS):
+        if e.key == ti.ui.SPACE:
+            # Reset simulation
+            init_simulation()
+            current_t = 0.0
+
+    # Update camera position
     for k in range(ns):
         timestep()
         current_t += dt
@@ -254,14 +270,23 @@ while True:
                indices=indices,
                per_vertex_color=colors,
                two_sided=True)
-    
-    # Uncomment this part for collision
-    # scene.mesh(obstacle.verts,
-    #            indices=obstacle.tris,
-    #            color=(0.8, 0.7, 0.6))
+
     canvas.scene(scene)
     
-    # if record:
-    #     img = window.get_image_buffer_as_numpy()
-    #     video_manager.write_frame(img)
+    # gui
+    gui = window.get_gui()
+    with gui.sub_window("Controls", 0.02, 0.02, 0.4, 0.25):
+        
+        # Update k_drag with a slider
+        new_k_drag = gui.slider_float("Viscous Damping", k_drag[None], 0.0, 10.0)
+        if new_k_drag != k_drag[None]:
+            k_drag[None] = new_k_drag
+        new_youngs_modulus = gui.slider_float('Youngs Modulus', YoungsModulus[None], 0, 620)
+        new_possion_ratio = gui.slider_float('Poissons Ratio', PoissonsRatio[None], 0.0, 0.4)
+        # Update Young's Modulus with a slider
+        if new_youngs_modulus != YoungsModulus[None] or new_possion_ratio != PoissonsRatio[None]:
+            YoungsModulus[None] = new_youngs_modulus
+            PoissonsRatio[None] = new_possion_ratio
+            compute_lame_parameters()  # Recompute Lame parameters after Young's modulus change
+
     window.show()
