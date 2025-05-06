@@ -5,13 +5,17 @@ import numpy as np
 from PA1.scene import Scene, Init
 import PA1.helper as hp
 
-ti.init(arch=ti.vulkan)
+ti.init(arch=ti.gpu)
 # ------------------- Simulation parameters ------------------- #
 # timestep for explicit integration
 n = 64
 stepsize = 2e-2 / n
 ns = int((1/60) // stepsize)
 dt = (1/60) / ns
+
+model_names = ['c', 'v', 'n']
+model = 'c'
+prev_model = model
 
 # ------------------- Physics parameters ------------------- #
 # particles are affected by gravity
@@ -159,9 +163,12 @@ def timestep():
     # Compute D, F, P, H
     compute_D()
     compute_F()
-    # compute_P_c()
-    # compute_P_v()
-    compute_P_n()
+    if ti.static(model == 'c'):
+        compute_P_c()
+    elif ti.static(model == 'v'):
+        compute_P_v()
+    else:
+        compute_P_n()
     compute_H()
 
     # Reset forces
@@ -259,6 +266,10 @@ while window.running:
             # Reset simulation
             init_simulation()
             current_t = 0.0
+        elif e.key in ['v','c','n']:
+            prev_model = model
+            model = e.key
+            init_simulation()
 
     # Update camera position
     for k in range(ns):
@@ -281,7 +292,19 @@ while window.running:
     with gui.sub_window("Controls", 0.02, 0.02, 0.4, 0.25):
 
         # Text
+        gui.text("Press 'v' for Neo Hookean")
+        gui.text("Press 'c' for Corotated")
+        gui.text("Press 'n' for Nonlinear")
         gui.text("Press SPACE to reset simulation")
+
+        # Update model with a slider
+        idx_old = model_names.index(model)
+        idx_new = gui.slider_int("Model ID", idx_old, 0, 2)
+        if idx_new != idx_old:
+            prev_model = model
+            model = model_names[idx_new]
+            if prev_model != model:
+                init_simulation()
         
         # Update k_drag with a slider
         new_k_drag = gui.slider_float("Viscous Damping", k_drag[None], 1.0, 10.0)
