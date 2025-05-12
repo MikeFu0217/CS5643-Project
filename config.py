@@ -6,7 +6,8 @@ import numpy as np
 class Config:
     def __init__(self,
                  n: int = 64,
-                 gravity: list = [0, -9.81, 0]):
+                 gravity: list = [0, -9.81, 0],
+                 contact_eps: float = 0.01,):
         # Grid size n
         self.n = n
 
@@ -25,5 +26,19 @@ class Config:
         self.ModelSelector = ti.field(ti.i32, ())
         self.ModelSelector[None] = 0
 
+        # Collision
+        self.obstacle_names = ["Sphere"]
+        self.obstacle = "Sphere"
+        self.CollisionSelector = ti.field(ti.i32, ())
+        self.CollisionSelector[None] = 0
+
+        self.contact_eps = contact_eps
+
     def update_ModelSelector(self):
         self.ModelSelector[None] = self.model_names.find(self.model)
+
+    def update_CollisionSelector(self):
+        if self.obstacle in self.obstacle_names:
+            self.CollisionSelector[None] = self.obstacle_names.index(self.obstacle)
+        else:
+            self.CollisionSelector[None] = -1

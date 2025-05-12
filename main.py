@@ -6,20 +6,21 @@ from config import Config
 from physics import Physics
 from cloth import Cloth
 from render import Render
+from scene import Scene, Init
 
 ti.init(arch=ti.gpu)
 
 cfg = Config(n=32, gravity=[0, -9.81, 0])
-
 cloth = Cloth(cfg.n, pos=[-0.1, 0.6, 0.1], pins=[0, cfg.n-1])
+obstacle = Scene(Init.CLOTH_SPHERE)
+phy = Physics(cfg, cloth, obstacle, E=450, nu=0.15, k_drag=1.2)
 
-phy = Physics(cfg, cloth, E=450, nu=0.15, k_drag=1.2)
-
-def init_state():
+def init_cpu():
     cfg.update_ModelSelector()
+    cfg.update_CollisionSelector()
 
 @ti.kernel
-def init_sim():
+def init_gpu():
     cloth.init_state()
     phy.compute_D0_Tk()
     phy.reset_cloth_force()
@@ -59,7 +60,7 @@ camera.fov(30.0)
 
 # Initialize sim
 renderer = Render(cloth)
-init_sim()
+init_gpu()
 renderer.initialize_mesh_indices()
 
 # Run sim
@@ -69,12 +70,12 @@ while window.running:
     for e in window.get_events(ti.ui.PRESS):
         if e.key == ti.ui.SPACE:
             # Reset simulation
-            init_sim()
+            init_gpu()
         elif e.key in ['v','c','n']:
             cfg.prev_model = cfg.model
             cfg.model = e.key
-            init_state()
-            init_sim()
+            init_cpu()
+            init_gpu()
 
     # Update timestep and vertices
     for k in range(cfg.ns):
@@ -88,6 +89,10 @@ while window.running:
                indices=renderer.indices,
                per_vertex_color=renderer.colors,
                two_sided=True)
+    if cfg.obstacle is not None:
+        scene.mesh(obstacle.verts,
+                   indices=obstacle.tris,
+                   color=(0.8, 0.7, 0.6))
 
     canvas.scene(scene)
     
@@ -96,9 +101,7 @@ while window.running:
     with gui.sub_window("Controls", 0.02, 0.02, 0.4, 0.25):
 
         # Text
-        gui.text("Press 'v' for Neo Hookean")
-        gui.text("Press 'c' for Corotated")
-        gui.text("Press 'n' for Nonlinear")
+        gui.text("Press 'v', 'c', 'n' to select models")
         gui.text("Press SPACE to reset simulation")
 
         # Update cfg.model with a slider
@@ -108,8 +111,22 @@ while window.running:
             cfg.prev_model = cfg.model
             cfg.model = cfg.model_names[idx_new]
             if cfg.prev_model != cfg.model:
-                init_state()
-                init_sim()
+                init_cpu()
+                init_gpu()
+
+        # Select obstacle
+        if cfg.obstacle is None:
+            idx_old = -1
+        else:
+            idx_old = cfg.obstacle_names.index(cfg.obstacle)
+        idx_new = gui.slider_int("Obstacle ID", idx_old, -1, 0)
+        if idx_new != idx_old:
+            if idx_new == -1:
+                cfg.obstacle = None
+            else:
+                cfg.obstacle = cfg.obstacle_names[idx_new]
+            init_cpu()
+            init_gpu()
         
         # Update k_drag with a slider
         new_k_drag = gui.slider_float("Viscous Damping", phy.k_drag[None], 1.0, 10.0)

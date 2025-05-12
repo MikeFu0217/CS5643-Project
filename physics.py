@@ -4,16 +4,21 @@ import numpy as np
 
 from config import Config
 from cloth import Cloth
+from scene import Scene, Init
 
 @ti.data_oriented
 class Physics:
     def __init__(self,
                  cfg: Config,
                  cloth: Cloth,
+                 obstacle: Scene,
                  E: float = 450,
                  nu: float = 0.15,
                  k_drag: float = 1.2,):
         self.cfg = cfg
+        self.cloth = cloth
+        self.obstacle = obstacle
+
         self.m = 1.0/(cfg.n * cfg.n)
 
         self.k_drag = ti.field(ti.f32, ())
@@ -32,7 +37,6 @@ class Physics:
         self.compute_lame_parameters()
 
         # deformation gradient
-        self.cloth = cloth
         self.D0 = ti.Matrix.field(3, 3, dtype=ti.f32, shape=cloth.N_triangles)
         self.Tk = ti.field(dtype=ti.f32, shape=cloth.N_triangles)
         self.D = ti.Matrix.field(3, 3, dtype=ti.f32, shape=cloth.N_triangles)
@@ -143,6 +147,14 @@ class Physics:
             self.cloth.v[i] += self.cloth.force[i] / self.m * self.cfg.dt
             # viscous damping
             self.cloth.v[i] *= 1 - self.k_drag[None] * self.cfg.dt
+
+            # Collision with sphere
+            if self.cfg.CollisionSelector[None] == 0:
+                # Sphere collision
+                if tm.length(self.cloth.x[i] - self.obstacle.ball_center[0]) < self.obstacle.ball_radius + self.cfg.contact_eps:
+                    normal = tm.normalize(self.cloth.x[i] - self.obstacle.ball_center[0])
+                    self.cloth.v[i] -=  tm.min(0, tm.dot(self.cloth.v[i], normal)) * normal
+            
         # Pinning
         for i in range(self.cloth.pins.shape[0]):
             idx = self.cloth.pins[i]
