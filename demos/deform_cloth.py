@@ -72,7 +72,7 @@ triangles.from_numpy(triangles_np)
 
 # pinning, indexes of vertices
 # pins_np = [0, n-1]
-pins_np = [0]
+pins_np = [0, n-1]
 pins_np = np.array(pins_np, dtype=np.int32)
 pins = ti.field(dtype=int, shape=pins_np.shape)
 pins.from_numpy(pins_np)
