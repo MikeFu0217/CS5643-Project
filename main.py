@@ -15,6 +15,9 @@ cloth = Cloth(cfg.n, pos=[-0.1, 0.6, 0.1], pins=[0, cfg.n-1])
 
 phy = Physics(cfg, cloth, E=450, nu=0.15, k_drag=1.2)
 
+def init_state():
+    cfg.update_ModelSelector()
+
 @ti.kernel
 def init_sim():
     cloth.init_state()
@@ -26,7 +29,12 @@ def timestep():
     # Compute D, F, P, H
     phy.compute_D()
     phy.compute_F()
-    phy.compute_P_c()
+    if (cfg.ModelSelector[None] == 0):
+        phy.compute_P_c()
+    elif (cfg.ModelSelector[None] == 1):
+        phy.compute_P_v()
+    else:
+        phy.compute_P_n()
     phy.compute_H()
 
     # Update forces
@@ -65,6 +73,7 @@ while window.running:
         elif e.key in ['v','c','n']:
             cfg.prev_model = cfg.model
             cfg.model = e.key
+            init_state()
             init_sim()
 
     # Update timestep and vertices
@@ -99,6 +108,7 @@ while window.running:
             cfg.prev_model = cfg.model
             cfg.model = cfg.model_names[idx_new]
             if cfg.prev_model != cfg.model:
+                init_state()
                 init_sim()
         
         # Update k_drag with a slider

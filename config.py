@@ -19,6 +19,11 @@ class Config:
         self.dt = (1/60) / self.ns
 
         # Model selection
-        self.model_names = ['c', 'v', 'n']
+        self.model_names = "cvn"
         self.model = 'c'
         self.prev_model = 'c'
+        self.ModelSelector = ti.field(ti.i32, ())
+        self.ModelSelector[None] = 0
+
+    def update_ModelSelector(self):
+        self.ModelSelector[None] = self.model_names.find(self.model)
