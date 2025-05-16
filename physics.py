@@ -15,7 +15,8 @@ class Physics:
                  E: float = 450,
                  nu: float = 0.15,
                  k_drag: float = 1.2,
-                 self_collision_strength: float = 200.0,):
+                 self_collision_strength: float = 200.0,
+                 mu_friction : float = 0.3,):
         self.cfg = cfg
         self.cloth = cloth
         self.obstacle = obstacle
@@ -48,6 +49,10 @@ class Physics:
         # self-collision
         self.self_collision_strength = ti.field(dtype=ti.f32, shape=())
         self.self_collision_strength[None] = self_collision_strength
+
+        # Friction
+        self.mu_friction = ti.field(ti.f32, ())
+        self.mu_friction[None] = mu_friction
 
     @ti.kernel
     def compute_lame_parameters(self):
@@ -144,7 +149,7 @@ class Physics:
             self.cloth.force[c] += fc
 
     @ti.func
-    def apply_self_collision_brute(self):
+    def apply_self_collision(self):
         for i in range(self.cloth.N):
             for j in range(self.cloth.N):
                 if i != j:
@@ -152,10 +157,18 @@ class Physics:
                     pj = self.cloth.x[j]
                     dir = pi - pj
                     dist = dir.norm()
-                    eps = self.cfg.contact_eps * 2 # or use a fixed small threshold
+                    eps = self.cfg.self_contact_eps
                     if dist < eps:
                         force = self.self_collision_strength[None] * (eps - dist) * dir.normalized()
                         self.cloth.force[i] += force
+
+
+    @ti.func
+    def apply_friction(self, i, vn, vt):
+        vt_mag = vt.norm()
+        if vt_mag > 1e-6:
+            friction_force = tm.min(self.mu_friction[None] * abs(vn), vt_mag)
+            self.cloth.v[i] -= friction_force * (vt / vt_mag)
 
 
     # Forward Euler integration
@@ -173,7 +186,15 @@ class Physics:
                 # Sphere collision
                 if tm.length(self.cloth.x[i] - self.obstacle.ball_center[0]) < self.obstacle.ball_radius + self.cfg.contact_eps:
                     normal = tm.normalize(self.cloth.x[i] - self.obstacle.ball_center[0])
-                    self.cloth.v[i] -=  tm.min(0, tm.dot(self.cloth.v[i], normal)) * normal
+                    vn = tm.dot(self.cloth.v[i], normal)
+                    vt = self.cloth.v[i] - vn * normal
+
+                    # Remove normal penetration component
+                    self.cloth.v[i] -=  tm.min(0, vn) * normal
+
+                    # Apply friction
+                    self.apply_friction(i, vn, vt)
+
             
         # Pinning
         for i in range(self.cloth.pins.shape[0]):
