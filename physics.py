@@ -152,15 +152,16 @@ class Physics:
     def apply_self_collision(self):
         for i in range(self.cloth.N):
             for j in range(self.cloth.N):
-                if i != j:
-                    pi = self.cloth.x[i]
-                    pj = self.cloth.x[j]
-                    dir = pi - pj
-                    dist = dir.norm()
-                    eps = self.cfg.self_contact_eps
-                    if dist < eps:
-                        force = self.self_collision_strength[None] * (eps - dist) * dir.normalized()
-                        self.cloth.force[i] += force
+                if self.cfg.self_collision_enabled[None] == 1:
+                    if i != j:
+                        pi = self.cloth.x[i]
+                        pj = self.cloth.x[j]
+                        dir = pi - pj
+                        dist = dir.norm()
+                        eps = self.cfg.self_contact_eps
+                        if dist < eps:
+                            force = self.self_collision_strength[None] * (eps - dist) * dir.normalized()
+                            self.cloth.force[i] += force
 
 
     @ti.func
@@ -194,35 +195,61 @@ class Physics:
                     self.cloth.v[i] -=  tm.min(0, vn) * normal
 
                     # Apply friction
-                    self.apply_friction(i, vn, vt)
+                    if self.cfg.friction_enabled[None] == 1:
+                        self.apply_friction(i, vn, vt)
 
             
             # Collision with table
             elif self.cfg.CollisionSelector[None] == 1:
-                # Table collision
+                # Retrieve table obstacle parameters
                 obstacle = self.obstacles.table
-                p_x, p_y, p_z = self.cloth.x[i][0], self.cloth.x[i][1], self.cloth.x[i][2]
-                top_x, top_y, top_z = obstacle.tabletop_center[0][0], obstacle.tabletop_center[0][1], obstacle.tabletop_center[0][2]
-                top_h, top_r = obstacle.tabletop_height, obstacle.tabletop_radius
-                d_h = tm.sqrt( (p_x-top_x)**2 + (p_z-top_z)**2 )
-                
-                pnt_top = (top_y + top_h/2) - p_y
-                # For the bottom surface: how far above the bottom is the particle?
-                pnt_bottom = p_y - (top_y - top_h/2)
-                # For the side surface: how far inside the table's radius is the particle?
-                pnt_side = top_r - d_h
-            
-                # If the particle is in inside the table top
-                if p_y < top_y + top_h/2 + self.cfg.contact_eps and p_y > top_y - top_h/2 - self.cfg.contact_eps and d_h < top_r + self.cfg.contact_eps:                
-                    if pnt_side < pnt_top and pnt_side < pnt_bottom: # Collision with side
-                        normal = tm.normalize(ti.Vector([p_x-top_x, 0.0, p_z-top_z]))
-                        self.cloth.v[i] -=  tm.min(0, tm.dot(self.cloth.v[i], normal)) * normal
-                    elif pnt_top < pnt_side and pnt_top < pnt_bottom: # Collision with top
-                        normal = ti.Vector([0, 1, 0])
-                        self.cloth.v[i] -=  tm.min(0, tm.dot(self.cloth.v[i], normal)) * normal
-                    else: # Collision with bottom
-                        normal = ti.Vector([0, -1, 0])
-                        self.cloth.v[i] -=  tm.min(0, tm.dot(self.cloth.v[i], normal)) * normal
+                top_center = obstacle.tabletop_center[0]        # Vector3: center of tabletop
+                top_h      = obstacle.tabletop_height          # float : height of table
+                top_r      = obstacle.tabletop_radius          # float : radius of table cylinder
+
+                # Particle position
+                p = self.cloth.x[i]
+                p_x, p_y, p_z = p[0], p[1], p[2]
+                top_x, top_y, top_z = top_center[0], top_center[1], top_center[2]
+
+                # Compute horizontal (XZ-plane) distance from table axis
+                d_h = tm.sqrt((p_x - top_x) ** 2 + (p_z - top_z) ** 2)
+
+                # Distances to the three table surfaces
+                # How far above/below the top face
+                pnt_top    = (top_y + top_h / 2) - p_y
+                # How far above/below the bottom face
+                pnt_bottom = p_y - (top_y - top_h / 2)
+                # How far inside/outside the cylindrical side
+                pnt_side   = top_r - d_h
+
+                # Check if particle is within contact epsilon of any table face
+                if (p_y < top_y + top_h/2 + self.cfg.contact_eps and
+                    p_y > top_y - top_h/2 - self.cfg.contact_eps and
+                    d_h < top_r + self.cfg.contact_eps):
+
+                    # Determine which face is collided: side vs. top vs. bottom
+                    normal = ti.Vector([0.0, 0.0, 0.0])
+                    if pnt_side < pnt_top and pnt_side < pnt_bottom:
+                        # Side collision: normal points radially outward in XZ plane
+                        normal = tm.normalize(ti.Vector([p_x - top_x, 0.0, p_z - top_z]))
+                    elif pnt_top < pnt_side and pnt_top < pnt_bottom:
+                        # Top face collision: normal is +Y
+                        normal = ti.Vector([0.0, 1.0, 0.0])
+                    else:
+                        # Bottom face collision: normal is -Y
+                        normal = ti.Vector([0.0, -1.0, 0.0])
+
+                    # Decompose velocity into normal and tangential components
+                    vn = tm.dot(self.cloth.v[i], normal)            # normal component (scalar)
+                    vt = self.cloth.v[i] - vn * normal              # tangential component (vector)
+
+                    # Remove any penetrating velocity along the normal
+                    self.cloth.v[i] -= tm.min(0.0, vn) * normal
+
+                    # Apply friction along the tangential direction if enabled
+                    if self.cfg.friction_enabled[None] == 1:
+                        self.apply_friction(i, vn, vt)
             
         # Pinning
         for i in range(self.cloth.pin_cnt[None]):

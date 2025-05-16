@@ -18,6 +18,8 @@ phy = Physics(cfg, cloth, obstacles, E=450, nu=0.15, k_drag=1.2)
 def init_cpu():
     cfg.update_ModelSelector()
     cfg.update_CollisionSelector()
+    cfg.update_self_collision()
+    cfg.update_friction()
 
 @ti.kernel
 def init_gpu():
@@ -41,6 +43,8 @@ def timestep():
     # Update forces
     phy.reset_cloth_force()
     phy.compute_cloth_internal_force()
+
+    # Self-collision
     phy.apply_self_collision()
 
     # Update velocity and position
@@ -102,8 +106,9 @@ while window.running:
     with gui.sub_window("Controls", 0.02, 0.02, 0.4, 0.25):
 
         # Text
-        gui.text("Press 'v', 'c', 'n' to select models")
         gui.text("Press SPACE to reset simulation")
+        gui.text("Press 'v', 'c', 'n' to select models")
+        
 
         # Update cfg.model with a slider
         idx_old = cfg.model_names.index(cfg.model)
@@ -149,5 +154,19 @@ while window.running:
             phy.YoungsModulus[None] = new_youngs_modulus
             phy.PoissonsRatio[None] = new_possion_ratio
             phy.compute_lame_parameters()  # Recompute Lame parameters after Young's modulus change
+
+        # Update self-collision
+        new_self_collision = gui.checkbox("Self Collision", cfg.self_collision)
+        if new_self_collision != cfg.self_collision:
+            cfg.self_collision = new_self_collision
+            init_cpu()
+            init_gpu()
+
+        # Update friction
+        new_friction = gui.checkbox("Friction", cfg.friction)
+        if new_friction != cfg.friction:
+            cfg.friction = new_friction
+            init_cpu()
+            init_gpu()
 
     window.show()

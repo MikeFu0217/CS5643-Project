@@ -37,9 +37,17 @@ class Config:
         self.pin_options = [[], [0], [0, n-1], [0, n*n-1], [0, n*(n-1)]]
         self.pin = 0
 
-
+        # Self-collision
         self.contact_eps = contact_eps
         self.self_contact_eps = self_contact_eps
+        self.self_collision = 1
+        self.self_collision_enabled = ti.field(ti.i32, ())
+        self.self_collision_enabled[None] = 1
+
+        # Friction
+        self.friction = 0
+        self.friction_enabled = ti.field(ti.i32, ())
+        self.friction_enabled[None] = 0
 
     def update_ModelSelector(self):
         self.ModelSelector[None] = self.model_names.find(self.model)
@@ -49,3 +57,15 @@ class Config:
             self.CollisionSelector[None] = self.obstacle_names.index(self.obstacle)
         else:
             self.CollisionSelector[None] = -1
+
+    def update_self_collision(self):
+        if self.self_collision == 0:
+            self.self_collision_enabled[None] = 0
+        else:
+            self.self_collision_enabled[None] = 1
+    
+    def update_friction(self):
+        if self.friction == 0:
+            self.friction_enabled[None] = 0
+        else:
+            self.friction_enabled[None] = 1
