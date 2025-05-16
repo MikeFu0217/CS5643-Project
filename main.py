@@ -41,6 +41,7 @@ def timestep():
     # Update forces
     phy.reset_cloth_force()
     phy.compute_cloth_internal_force()
+    phy.apply_self_collision()
 
     # Update velocity and position
     phy.forward_euler()

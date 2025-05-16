@@ -7,7 +7,8 @@ class Config:
     def __init__(self,
                  n: int = 64,
                  gravity: list = [0, -9.81, 0],
-                 contact_eps: float = 0.01,):
+                 contact_eps: float = 0.01,
+                 self_contact_eps: float = 0.02,):
         # Grid size n
         self.n = n
 
@@ -38,6 +39,7 @@ class Config:
 
 
         self.contact_eps = contact_eps
+        self.self_contact_eps = self_contact_eps
 
     def update_ModelSelector(self):
         self.ModelSelector[None] = self.model_names.find(self.model)
