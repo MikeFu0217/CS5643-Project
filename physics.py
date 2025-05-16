@@ -156,9 +156,10 @@ class Physics:
                     self.cloth.v[i] -=  tm.min(0, tm.dot(self.cloth.v[i], normal)) * normal
             
         # Pinning
-        for i in range(self.cloth.pins.shape[0]):
+        for i in range(self.cloth.pin_cnt[None]):
             idx = self.cloth.pins[i]
             self.cloth.v[idx] = [0.0, 0.0, 0.0]
+            
         # Update position
         for i in range(self.cloth.N):
             self.cloth.x[i] += self.cloth.v[i] * self.cfg.dt

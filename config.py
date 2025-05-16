@@ -20,9 +20,9 @@ class Config:
         self.dt = (1/60) / self.ns
 
         # Model selection
-        self.model_names = "cvn"
-        self.model = 'c'
-        self.prev_model = 'c'
+        self.model_names = "vcn"
+        self.model = 'v'
+        self.prev_model = 'v'
         self.ModelSelector = ti.field(ti.i32, ())
         self.ModelSelector[None] = 0
 
@@ -31,6 +31,11 @@ class Config:
         self.obstacle = "Sphere"
         self.CollisionSelector = ti.field(ti.i32, ())
         self.CollisionSelector[None] = 0
+
+        # Pinning
+        self.pin_options = [[], [0], [0, n-1], [0, n*n-1], [0, n*(n-1)]]
+        self.pin = 0
+
 
         self.contact_eps = contact_eps
 

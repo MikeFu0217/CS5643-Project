@@ -36,8 +36,10 @@ class Cloth:
         self.triangles.from_numpy(self.triangles_np)
 
         # pinning, indexes of vertices
-        self.pins = ti.field(dtype=int, shape=(len(pins), ))
-        self.pins.from_numpy(np.array(pins, dtype=np.int32))
+        self.MAX_PINS = 4
+        self.pins = ti.field(dtype=int, shape=(self.MAX_PINS, ))
+        self.pin_cnt  = ti.field(int, shape=())
+        self.set_pins(pins)
 
         # cloth system state
         x_rest_np = np.zeros((self.N, 3), dtype=np.float32)
@@ -53,6 +55,13 @@ class Cloth:
         self.x = ti.Vector.field(3, dtype=ti.f32, shape=self.N)
         self.v = ti.Vector.field(3, dtype=ti.f32, shape=self.N)
         self.force = ti.Vector.field(3, dtype=ti.f32, shape=self.N)
+
+    def set_pins(self, pins: list):
+        self.pins.fill(-1)
+        for i, idx in enumerate(pins):
+            self.pins[i] = idx
+        self.pin_cnt[None] = len(pins)
+
 
     @ti.func
     def init_state(self):

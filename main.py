@@ -11,7 +11,7 @@ from scene import Scene, Init
 ti.init(arch=ti.gpu)
 
 cfg = Config(n=32, gravity=[0, -9.81, 0])
-cloth = Cloth(cfg.n, pos=[-0.1, 0.6, 0.1], pins=[0, cfg.n-1])
+cloth = Cloth(cfg.n, pos=[-0.1, 0.6, 0.1], pins=cfg.pin_options[cfg.pin])
 obstacle = Scene(Init.CLOTH_SPHERE)
 phy = Physics(cfg, cloth, obstacle, E=450, nu=0.15, k_drag=1.2)
 
@@ -31,9 +31,9 @@ def timestep():
     phy.compute_D()
     phy.compute_F()
     if (cfg.ModelSelector[None] == 0):
-        phy.compute_P_c()
-    elif (cfg.ModelSelector[None] == 1):
         phy.compute_P_v()
+    elif (cfg.ModelSelector[None] == 1):
+        phy.compute_P_c()
     else:
         phy.compute_P_n()
     phy.compute_H()
@@ -127,12 +127,21 @@ while window.running:
                 cfg.obstacle = cfg.obstacle_names[idx_new]
             init_cpu()
             init_gpu()
+
+        # Select pinning
+        idx_old = cfg.pin
+        idx_new = gui.slider_int("Pin ID", idx_old, 0, 4)
+        if idx_new != idx_old:
+            cfg.pin = idx_new
+            cloth.set_pins(cfg.pin_options[idx_new])
+            init_cpu()
+            init_gpu()
         
         # Update k_drag with a slider
         new_k_drag = gui.slider_float("Viscous Damping", phy.k_drag[None], 1.0, 10.0)
         if new_k_drag != phy.k_drag[None]:
             phy.k_drag[None] = new_k_drag
-        new_youngs_modulus = gui.slider_float('Youngs Modulus', phy.YoungsModulus[None], 420, 1e3)
+        new_youngs_modulus = gui.slider_float('Youngs Modulus', phy.YoungsModulus[None], 420, 900)
         new_possion_ratio = gui.slider_float('Poissons Ratio', phy.PoissonsRatio[None], 0.0, 0.2)
         # Update Young's Modulus with a slider
         if new_youngs_modulus != phy.YoungsModulus[None] or new_possion_ratio != phy.PoissonsRatio[None]:
