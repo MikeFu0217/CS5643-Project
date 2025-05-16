@@ -4,20 +4,20 @@ import numpy as np
 
 from config import Config
 from cloth import Cloth
-from scene import Scene, Init
+from obstacles import Obstacles
 
 @ti.data_oriented
 class Physics:
     def __init__(self,
                  cfg: Config,
                  cloth: Cloth,
-                 obstacle: Scene,
+                 obstacles: Obstacles,
                  E: float = 450,
                  nu: float = 0.15,
                  k_drag: float = 1.2,):
         self.cfg = cfg
         self.cloth = cloth
-        self.obstacle = obstacle
+        self.obstacles = obstacles
 
         self.m = 1.0/(cfg.n * cfg.n)
 
@@ -151,15 +151,43 @@ class Physics:
             # Collision with sphere
             if self.cfg.CollisionSelector[None] == 0:
                 # Sphere collision
-                if tm.length(self.cloth.x[i] - self.obstacle.ball_center[0]) < self.obstacle.ball_radius + self.cfg.contact_eps:
-                    normal = tm.normalize(self.cloth.x[i] - self.obstacle.ball_center[0])
+                obstacle = self.obstacles.sphere
+                if tm.length(self.cloth.x[i] - obstacle.ball_center[0]) < obstacle.ball_radius + self.cfg.contact_eps:
+                    normal = tm.normalize(self.cloth.x[i] - obstacle.ball_center[0])
                     self.cloth.v[i] -=  tm.min(0, tm.dot(self.cloth.v[i], normal)) * normal
+            
+            # Collision with table
+            elif self.cfg.CollisionSelector[None] == 1:
+                # Table collision
+                obstacle = self.obstacles.table
+                p_x, p_y, p_z = self.cloth.x[i][0], self.cloth.x[i][1], self.cloth.x[i][2]
+                top_x, top_y, top_z = obstacle.tabletop_center[0][0], obstacle.tabletop_center[0][1], obstacle.tabletop_center[0][2]
+                top_h, top_r = obstacle.tabletop_height, obstacle.tabletop_radius
+                d_h = tm.sqrt( (p_x-top_x)**2 + (p_z-top_z)**2 )
+                
+                pnt_top = (top_y + top_h/2) - p_y
+                # For the bottom surface: how far above the bottom is the particle?
+                pnt_bottom = p_y - (top_y - top_h/2)
+                # For the side surface: how far inside the table's radius is the particle?
+                pnt_side = top_r - d_h
+            
+                # If the particle is in inside the table top
+                if p_y < top_y + top_h/2 + self.cfg.contact_eps and p_y > top_y - top_h/2 - self.cfg.contact_eps and d_h < top_r + self.cfg.contact_eps:                
+                    if pnt_side < pnt_top and pnt_side < pnt_bottom: # Collision with side
+                        normal = tm.normalize(ti.Vector([p_x-top_x, 0.0, p_z-top_z]))
+                        self.cloth.v[i] -=  tm.min(0, tm.dot(self.cloth.v[i], normal)) * normal
+                    elif pnt_top < pnt_side and pnt_top < pnt_bottom: # Collision with top
+                        normal = ti.Vector([0, 1, 0])
+                        self.cloth.v[i] -=  tm.min(0, tm.dot(self.cloth.v[i], normal)) * normal
+                    else: # Collision with bottom
+                        normal = ti.Vector([0, -1, 0])
+                        self.cloth.v[i] -=  tm.min(0, tm.dot(self.cloth.v[i], normal)) * normal
             
         # Pinning
         for i in range(self.cloth.pin_cnt[None]):
             idx = self.cloth.pins[i]
             self.cloth.v[idx] = [0.0, 0.0, 0.0]
-            
+
         # Update position
         for i in range(self.cloth.N):
             self.cloth.x[i] += self.cloth.v[i] * self.cfg.dt

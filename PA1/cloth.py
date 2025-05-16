@@ -2,7 +2,7 @@ import taichi as ti
 import taichi.math as tm
 import numpy as np
 
-from scene import Scene, Init
+from obstacles import Scene, Init
 import helper as hp
 
 # Have to use Vulkan arch on Mac for compatibility with GGUI

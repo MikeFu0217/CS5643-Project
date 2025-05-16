@@ -6,14 +6,14 @@ from config import Config
 from physics import Physics
 from cloth import Cloth
 from render import Render
-from scene import Scene, Init
+from obstacles import Obstacles
 
 ti.init(arch=ti.gpu)
 
 cfg = Config(n=32, gravity=[0, -9.81, 0])
 cloth = Cloth(cfg.n, pos=[-0.1, 0.6, 0.1], pins=cfg.pin_options[cfg.pin])
-obstacle = Scene(Init.CLOTH_SPHERE)
-phy = Physics(cfg, cloth, obstacle, E=450, nu=0.15, k_drag=1.2)
+obstacles = Obstacles()
+phy = Physics(cfg, cloth, obstacles, E=450, nu=0.15, k_drag=1.2)
 
 def init_cpu():
     cfg.update_ModelSelector()
@@ -90,8 +90,8 @@ while window.running:
                per_vertex_color=renderer.colors,
                two_sided=True)
     if cfg.obstacle is not None:
-        scene.mesh(obstacle.verts,
-                   indices=obstacle.tris,
+        scene.mesh(obstacles.get_obstacle(cfg.obstacle_names.index(cfg.obstacle)).verts,
+                   indices=obstacles.get_obstacle(cfg.obstacle_names.index(cfg.obstacle)).tris,
                    color=(0.8, 0.7, 0.6))
 
     canvas.scene(scene)
@@ -119,7 +119,7 @@ while window.running:
             idx_old = -1
         else:
             idx_old = cfg.obstacle_names.index(cfg.obstacle)
-        idx_new = gui.slider_int("Obstacle ID", idx_old, -1, 0)
+        idx_new = gui.slider_int("Obstacle ID", idx_old, -1, 1)
         if idx_new != idx_old:
             if idx_new == -1:
                 cfg.obstacle = None

@@ -27,7 +27,7 @@ class Config:
         self.ModelSelector[None] = 0
 
         # Collision
-        self.obstacle_names = ["Sphere"]
+        self.obstacle_names = ["Sphere", "Table"]
         self.obstacle = "Sphere"
         self.CollisionSelector = ti.field(ti.i32, ())
         self.CollisionSelector[None] = 0
