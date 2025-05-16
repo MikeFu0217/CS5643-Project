@@ -14,7 +14,8 @@ class Physics:
                  obstacle: Scene,
                  E: float = 450,
                  nu: float = 0.15,
-                 k_drag: float = 1.2,):
+                 k_drag: float = 1.2,
+                 self_collision_strength: float = 200.0,):
         self.cfg = cfg
         self.cloth = cloth
         self.obstacle = obstacle
@@ -43,6 +44,10 @@ class Physics:
         self.F = ti.Matrix.field(3, 3, dtype=ti.f32, shape=cloth.N_triangles)
         self.P = ti.Matrix.field(3, 3, dtype=ti.f32, shape=cloth.N_triangles)
         self.H = ti.Matrix.field(3, 3, dtype=ti.f32, shape=cloth.N_triangles)
+
+        # self-collision
+        self.self_collision_strength = ti.field(dtype=ti.f32, shape=())
+        self.self_collision_strength[None] = self_collision_strength
 
     @ti.kernel
     def compute_lame_parameters(self):
@@ -137,6 +142,21 @@ class Physics:
             self.cloth.force[a] += fa
             self.cloth.force[b] += fb
             self.cloth.force[c] += fc
+
+    @ti.func
+    def apply_self_collision_brute(self):
+        for i in range(self.cloth.N):
+            for j in range(self.cloth.N):
+                if i != j:
+                    pi = self.cloth.x[i]
+                    pj = self.cloth.x[j]
+                    dir = pi - pj
+                    dist = dir.norm()
+                    eps = self.cfg.contact_eps * 2 # or use a fixed small threshold
+                    if dist < eps:
+                        force = self.self_collision_strength[None] * (eps - dist) * dir.normalized()
+                        self.cloth.force[i] += force
+
 
     # Forward Euler integration
     @ti.func
