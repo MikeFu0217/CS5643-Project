@@ -10,7 +10,7 @@ from obstacles import Obstacles
 
 ti.init(arch=ti.gpu)
 
-cfg = Config(n=32, gravity=[0, -9.81, 0])
+cfg = Config(n=40, gravity=[0, -9.81, 0])
 cloth = Cloth(cfg.n, pos=[-0.1, 0.6, 0.1], pins=cfg.pin_options[cfg.pin])
 obstacles = Obstacles()
 phy = Physics(cfg, cloth, obstacles, E=450, nu=0.15, k_drag=1.2)
@@ -20,6 +20,7 @@ def init_cpu():
     cfg.update_CollisionSelector()
     cfg.update_self_collision()
     cfg.update_friction()
+    cfg.update_bending()
 
 @ti.kernel
 def init_gpu():
@@ -43,6 +44,7 @@ def timestep():
     # Update forces
     phy.reset_cloth_force()
     phy.compute_cloth_internal_force()
+    phy.compute_bending_forces()
 
     # Self-collision
     phy.apply_self_collision()
@@ -52,7 +54,7 @@ def timestep():
 
 # Create Taichi GUI
 camera = ti.ui.Camera()
-window = ti.ui.Window("Cloth Deformation", (1024, 1024), vsync=True)
+window = ti.ui.Window("Cloth Deformation", (1680, 1024), vsync=True)
 scene = window.get_scene()
 
 gui = window.get_gui()
@@ -103,7 +105,7 @@ while window.running:
     
     # gui
     gui = window.get_gui()
-    with gui.sub_window("Controls", 0.02, 0.02, 0.4, 0.25):
+    with gui.sub_window("Controls", 0.02, 0.02, 0.25, 0.35):
 
         # Text
         gui.text("Press SPACE to reset simulation")
@@ -161,6 +163,10 @@ while window.running:
             cfg.self_collision = new_self_collision
             init_cpu()
             init_gpu()
+        # if new_self_collision == 1:
+        #     new_self_collision_strength = gui.slider_float("Self Collision Strength", phy.self_collision_strength[None], 0, 500)
+        #     if new_self_collision_strength != phy.self_collision_strength[None]:
+        #         phy.self_collision_strength[None] = new_self_collision_strength
 
         # Update friction
         new_friction = gui.checkbox("Friction", cfg.friction)
@@ -168,5 +174,26 @@ while window.running:
             cfg.friction = new_friction
             init_cpu()
             init_gpu()
+        if new_friction == 1:
+            new_mu_friction = gui.slider_float("Friction Coefficient", phy.mu_friction[None], 0.0, 1.0)
+            if new_mu_friction != phy.mu_friction[None]:
+                phy.mu_friction[None] = new_mu_friction
+
+        # Update bending
+        new_bending = gui.checkbox("Bending Energy", cfg.bending)
+        if new_bending != cfg.bending:
+            cfg.bending = new_bending
+            init_cpu()
+            init_gpu()
+        if new_bending == 1:
+            new_bend_stiffness = gui.slider_float("Bending Stiffness", phy.bend_stiffness[None], 0.0, 10.0)
+            if new_bend_stiffness != phy.bend_stiffness[None]:
+                phy.bend_stiffness[None] = new_bend_stiffness
+            new_bend_damping = gui.slider_float("Bending Damping", phy.bend_damping[None], 0.0, 1.0)
+            if new_bend_damping != phy.bend_damping[None]:
+                phy.bend_damping[None] = new_bend_damping
+            new_angle_tol = gui.slider_float("Bending Angle Tolerance", phy.angle_tol[None], 0.0, np.pi/2)
+            if new_angle_tol != phy.angle_tol[None]:
+                phy.angle_tol[None] = new_angle_tol
 
     window.show()

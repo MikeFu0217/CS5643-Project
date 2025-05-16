@@ -49,6 +49,11 @@ class Config:
         self.friction_enabled = ti.field(ti.i32, ())
         self.friction_enabled[None] = 0
 
+        # Bending
+        self.bending = 0
+        self.bending_enabled = ti.field(ti.i32, ())
+        self.bending_enabled[None] = 0
+
     def update_ModelSelector(self):
         self.ModelSelector[None] = self.model_names.find(self.model)
 
@@ -69,3 +74,9 @@ class Config:
             self.friction_enabled[None] = 0
         else:
             self.friction_enabled[None] = 1
+
+    def update_bending(self):
+        if self.bending == 0:
+            self.bending_enabled[None] = 0
+        else:
+            self.bending_enabled[None] = 1

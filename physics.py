@@ -21,6 +21,66 @@ class Physics:
         self.cloth = cloth
         self.obstacles = obstacles
 
+        # --- BUILD HINGES & REST ANGLES (Python side) ---
+        import numpy as _np
+
+        # Get triangle indices and rest positions from Cloth
+        tri_np = self.cloth.triangles_np           # shape=(N_tri,3)
+        x_rest_np = self.cloth.x_rest.to_numpy()   # shape=(N,3)
+
+        # Collect triangles sharing each undirected edge
+        edge_to_tri = {}
+        for t_idx, tri in enumerate(tri_np):
+            for e in ((tri[0],tri[1]), (tri[1],tri[2]), (tri[2],tri[0])):
+                key = tuple(sorted(e))
+                edge_to_tri.setdefault(key, []).append(t_idx)
+
+        hinges_list = []
+        rest_angles_list = []
+        for (v0, v1), tris in edge_to_tri.items():
+            if len(tris) == 2:
+                t1, t2 = tris
+                tri1, tri2 = tri_np[t1], tri_np[t2]
+                # Find opposite vertices v2, v3
+                v2 = [v for v in tri1 if v not in (v0, v1)][0]
+                v3 = [v for v in tri2 if v not in (v0, v1)][0]
+                hinges_list.append([v0, v1, v2, v3])
+                # Compute rest dihedral angle theta_0
+                X0, X1, X2, X3 = x_rest_np[[v0, v1, v2, v3]]
+                n1 = _np.cross(X1 - X0, X2 - X0)
+                n2 = _np.cross(X3 - X0, X1 - X0)
+                cos0 = _np.dot(n1, n2) / (_np.linalg.norm(n1) * _np.linalg.norm(n2))
+                rest_angles_list.append(_np.arccos(_np.clip(cos0, -1.0, 1.0)))
+
+        # Determine hinge count dynamically
+        hinge_count = len(hinges_list)
+        self.N_hinges = hinge_count
+        # Temporarily store Python-side lists, write to Taichi fields later
+        self._hinges_list = hinges_list
+        self._rest_angles_list = rest_angles_list
+        # --- END BUILD HINGES & REST ANGLES ---
+
+        # --- DECLARE BENDING FIELDS ---
+        # Bending stiffness coefficient
+        self.bend_stiffness = ti.field(ti.f32, shape=())
+        self.bend_stiffness[None] = 1.0  # tune this value as needed
+
+        # Hinges: each stores (v0, v1, v2, v3)
+        self.hinges = ti.Vector.field(4, dtype=ti.i32, shape=self.N_hinges)
+        # Rest dihedral angles theta_0
+        self.rest_angles = ti.field(dtype=ti.f32, shape=self.N_hinges)
+
+        # Write Python lists into Taichi fields
+        import numpy as _np  # ensure already imported
+        self.hinges.from_numpy(_np.array(self._hinges_list, dtype=_np.int32))
+        self.rest_angles.from_numpy(_np.array(self._rest_angles_list, dtype=_np.float32))
+
+        # Other bending parameters
+        self.bend_damping = ti.field(ti.f32, shape=())
+        self.bend_damping[None] = 0.1  # tune this value as needed
+        self.angle_tol = ti.field(ti.f32, shape=())
+        self.angle_tol[None] = 1e-3  # tune this value as needed
+        # --- END DECLARE BENDING FIELDS ---
         self.m = 1.0/(cfg.n * cfg.n)
 
         self.k_drag = ti.field(ti.f32, ())
@@ -128,6 +188,66 @@ class Physics:
     def compute_H(self):
         for i in range(self.cloth.N_triangles):
             self.H[i] = - self.Tk[i] * self.P[i] @ self.D0[i].inverse().transpose()
+
+    # Compute bending force
+    @ti.func
+    def compute_bending_angle(self, a: int, b: int, c: int, d: int) -> ti.f32:
+        # Compute dihedral angle between triangles (a,b,c) and (a,b,d)
+        Xa = self.cloth.x[a]
+        Xb = self.cloth.x[b]
+        Xc = self.cloth.x[c]
+        Xd = self.cloth.x[d]
+        # Normals of the two triangles
+        N1 = tm.cross(Xb - Xa, Xc - Xa)
+        N2 = tm.cross(Xd - Xa, Xb - Xa)
+        # Cosine of dihedral angle
+        cos_theta = tm.dot(N1, N2) / (N1.norm() * N2.norm() + 1e-6)
+        # Clamp to valid range
+        cos_theta = ti.min(1.0, ti.max(-1.0, cos_theta))
+        return ti.acos(cos_theta)
+    
+    @ti.func
+    def compute_bending_forces(self):
+        """
+        Apply triangle-hinge bending forces with deadzone and damping.
+        """
+
+        for i in range(self.N_hinges):
+            if self.cfg.bending_enabled[None] == 1:
+                a, b, c, d = self.hinges[i]
+                Xa = self.cloth.x[a]; Xb = self.cloth.x[b]
+                Xc = self.cloth.x[c]; Xd = self.cloth.x[d]
+
+                # compute normals and hinge height
+                N1 = tm.cross(Xb - Xa, Xc - Xa)
+                N2 = tm.cross(Xd - Xa, Xb - Xa)
+                edge_vec = Xb - Xa
+                len_edge = edge_vec.norm() + 1e-6
+                h_avg = 0.5 * ((N1.norm() + N2.norm()) / len_edge)
+
+                # current dihedral angle
+                theta = self.compute_bending_angle(a, b, c, d)
+                # deviation from rest
+                delta = theta - self.rest_angles[i]
+                # --- DEADZONE: clamp small deviations to zero ---
+                delta = ti.select(ti.abs(delta) < self.angle_tol[None], 0.0, delta)
+                # --- clamp maximum angle change to avoid explosion ---
+                delta = ti.max(-0.5, ti.min(0.5, delta))
+
+                # raw force magnitude with geometric weight
+                f_mag = - self.bend_stiffness[None] * h_avg * delta
+                # clamp max force
+                maxF: ti.f32 = 50.0
+                f_mag = ti.max(-maxF, ti.min(maxF, f_mag))
+                # apply damping
+                f_mag *= (1.0 - self.bend_damping[None])
+
+                # distribute along edge direction
+                edge_dir = edge_vec.normalized()
+                self.cloth.force[a] += -0.5 * f_mag * edge_dir
+                self.cloth.force[b] += -0.5 * f_mag * edge_dir
+                self.cloth.force[c] +=  0.5 * f_mag * edge_dir
+                self.cloth.force[d] +=  0.5 * f_mag * edge_dir
 
     # Reset force
     @ti.func
@@ -259,3 +379,9 @@ class Physics:
         # Update position
         for i in range(self.cloth.N):
             self.cloth.x[i] += self.cloth.v[i] * self.cfg.dt
+
+        # --- VELOCITY THRESHOLDING: zero out tiny residual velocities ---
+        v_tol: ti.f32 = 1e-4
+        for i in range(self.cloth.N):
+            if self.cloth.v[i].norm() < v_tol:
+                self.cloth.v[i] = ti.Vector([0.0, 0.0, 0.0])
