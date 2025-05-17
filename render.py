@@ -39,3 +39,18 @@ class Render:
         for i, j in ti.ndrange(self.n, self.n):
             idx = i * self.n + j
             self.vertices[idx] = self.cloth.x[idx]
+
+    def set_color_to_forces(self):
+        for i, j in ti.ndrange(self.n, self.n):
+            idx = i * self.n + j
+            if (self.cloth.v[idx].norm() > 0.1):
+                self.colors[idx] = (0.0, 0.0, 1.0)
+            else:
+                self.colors[idx] = (1.0, 0.2, 0.4)
+
+    def set_color_to_default(self):
+        for i, j in ti.ndrange(self.n, self.n):
+            if (i % 4 == 0) or (j % 4 == 0):
+                self.colors[i * self.n + j] = (1.0, 0.97, 0.95)
+            else:
+                self.colors[i * self.n + j] = (1.0, 0.2, 0.4)

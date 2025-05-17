@@ -21,6 +21,7 @@ def init_cpu():
     cfg.update_self_collision()
     cfg.update_friction()
     cfg.update_bending()
+    cloth.init_shift()
 
 @ti.kernel
 def init_gpu():
@@ -60,9 +61,9 @@ scene = window.get_scene()
 gui = window.get_gui()
 canvas = window.get_canvas()
 canvas.set_background_color((0.6, 0.6, 1.0))
-cam_pos = np.array([0.0, 0.8, 5.0])
+cam_pos = np.array([0.0, 2.0, 5.0])
 camera.position(cam_pos[0], cam_pos[1], cam_pos[2])
-camera.lookat(0.5, 0.2, 0.5)
+camera.lookat(0.5, 0.0, 0.5)
 camera.fov(30.0)
 
 # Initialize sim
@@ -77,6 +78,7 @@ while window.running:
     for e in window.get_events(ti.ui.PRESS):
         if e.key == ti.ui.SPACE:
             # Reset simulation
+            init_cpu()
             init_gpu()
         elif e.key in ['v','c','n']:
             cfg.prev_model = cfg.model
@@ -105,7 +107,7 @@ while window.running:
     
     # gui
     gui = window.get_gui()
-    with gui.sub_window("Controls", 0.02, 0.02, 0.25, 0.35):
+    with gui.sub_window("Controls", 0.7, 0.02, 0.25, 0.6):
 
         # Text
         gui.text("Press SPACE to reset simulation")
@@ -136,15 +138,45 @@ while window.running:
             init_cpu()
             init_gpu()
 
+        gui.text("Pinning and shifting")
         # Select pinning
         idx_old = cfg.pin
-        idx_new = gui.slider_int("Pin ID", idx_old, 0, 4)
+        idx_new = gui.slider_int("Pin ID", idx_old, 0, 5)
         if idx_new != idx_old:
             cfg.pin = idx_new
             cloth.set_pins(cfg.pin_options[idx_new])
             init_cpu()
             init_gpu()
-        
+        # Slide to shift along the y-axis for all pinned vertices
+        if cfg.pin != 0:
+            y_shift = gui.slider_float("Shift Y Pins", cloth.shift_y, 0, -1.5)
+            if y_shift != cloth.shift_y:
+                cloth.shift_y = y_shift
+                for i in range(cloth.pin_cnt[None]):
+                    idx = cloth.pins[i]
+                    cloth.x[idx][1] = cloth.off_y + cloth.shift_y
+        # Slide to shift along away from each other all pinned vertices
+        if cfg.pin == 5:
+            y_shift = gui.slider_float("Shift Away Pins", cloth.shift_away, -0.5, 0.5)
+            if y_shift != cloth.shift_away:
+                cloth.shift_away = y_shift
+                for i in range(cloth.pin_cnt[None]):
+                    idx = cloth.pins[i]
+                    if i == 0:  # first pint, shift along -x, z
+                        cloth.x[idx][0] = cloth.off_x - cloth.shift_away
+                        cloth.x[idx][2] = cloth.off_z + cloth.shift_away
+                    if i == 1:
+                        cloth.x[idx][0] = cloth.off_x - cloth.shift_away
+                        cloth.x[idx][2] = cloth.off_z + 1 - cloth.shift_away
+                    if i == 2:  # third pint, shift along +x, z
+                        cloth.x[idx][0] = cloth.off_x + 1 + cloth.shift_away
+                        cloth.x[idx][2] = cloth.off_z + cloth.shift_away
+                    if i == 3:  # fourth pint, shift along -x, z
+                        cloth.x[idx][0] = cloth.off_x + 1 + cloth.shift_away
+                        cloth.x[idx][2] = cloth.off_z + 1 - cloth.shift_away
+
+
+        gui.text("Deformation Parameters")
         # Update k_drag with a slider
         new_k_drag = gui.slider_float("Viscous Damping", phy.k_drag[None], 1.0, 10.0)
         if new_k_drag != phy.k_drag[None]:

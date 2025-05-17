@@ -34,7 +34,7 @@ class Config:
         self.CollisionSelector[None] = 0
 
         # Pinning
-        self.pin_options = [[], [0], [0, n-1], [0, n*n-1], [0, n*(n-1)]]
+        self.pin_options = [[], [0], [0, n-1], [0, n*n-1], [0, n*(n-1)], [0, n-1, n*(n-1), n*n-1]]
         self.pin = 0
 
         # Self-collision

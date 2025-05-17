@@ -75,7 +75,7 @@ class Scene:
     def init_sphere(self):
         # and for interest there is a collision object, just a sphere
         self.ball_center = ti.Vector.field(3, dtype=float, shape=(1, ))
-        self.ball_center[0] = [0.5, 0, 0.5]
+        self.ball_center[0] = [0.4, 0, 0.6]
         self.ball_radius = 0.3
 
         # Read geometry

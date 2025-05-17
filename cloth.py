@@ -7,12 +7,16 @@ class Cloth:
     def __init__(self,
                  n,
                  pos: list = [-0.1, 0.6, 0.1],
-                 pins: list = [0, 1],
+                 pins: list = [0, 1]
                  ):
         self.n = n
         self.N = n * n
         self.off_x, self.off_y, self.off_z = pos
         self.quad_size = 1.0 / (self.n - 1)
+        
+        # for pin shifting
+        self.shift_y = 0.0
+        self.shift_away = 0.0
 
         # vertices
         self.vertices = ti.Vector.field(3, dtype=ti.f32, shape=(self.N))
@@ -69,7 +73,7 @@ class Cloth:
         for i in range(self.N):
             self.x[i] = self.x_rest[i]
             self.v[i] = [0.0, 0.0, 0.0]
-            # if i in self.pins:
-            #     self.v[i] = [0.0, 0.0, 0.0]
-        # self.x.copy_from(self.x_rest)
-        # self.v.fill(0)
+
+    def init_shift(self):
+        self.shift_y = 0.0
+        self.shift_away = 0.0
