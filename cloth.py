@@ -60,6 +60,9 @@ class Cloth:
         self.v = ti.Vector.field(3, dtype=ti.f32, shape=self.N)
         self.force = ti.Vector.field(3, dtype=ti.f32, shape=self.N)
 
+        self.max_force = ti.field(ti.f32, ())
+        self.max_force[None] = 1.5
+
     def set_pins(self, pins: list):
         self.pins.fill(-1)
         for i, idx in enumerate(pins):

@@ -89,6 +89,8 @@ while window.running:
     # Update timestep and vertices
     for k in range(cfg.ns):
         timestep()
+        if cfg.show_force_color:
+            renderer.set_force_colors()
         renderer.update_vertices()
 
     scene.set_camera(camera)
@@ -227,5 +229,17 @@ while window.running:
             new_angle_tol = gui.slider_float("Bending Angle Tolerance", phy.angle_tol[None], 0.0, np.pi/2)
             if new_angle_tol != phy.angle_tol[None]:
                 phy.angle_tol[None] = new_angle_tol
+
+        # Update force color display
+        new_show_force_color = gui.checkbox("Force Color Display", cfg.show_force_color)
+        if new_show_force_color != cfg.show_force_color:
+            if new_show_force_color == 0:
+                renderer.set_color_to_default()
+            cfg.show_force_color = new_show_force_color
+        if cfg.show_force_color == 1:
+            new_max_force = gui.slider_float("Force Color Max", cloth.max_force[None], 0.0, 5.0)
+            if new_max_force != cloth.max_force[None]:
+                cloth.max_force[None] = new_max_force
+                renderer.set_force_colors()
 
     window.show()

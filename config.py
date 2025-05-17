@@ -54,6 +54,9 @@ class Config:
         self.bending_enabled = ti.field(ti.i32, ())
         self.bending_enabled[None] = 0
 
+        # Force color display
+        self.show_force_color = 0
+
     def update_ModelSelector(self):
         self.ModelSelector[None] = self.model_names.find(self.model)
 
